@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Nostr Galaxy Map</title>
     <style>
+        /* ... (all CSS from original, unchanged) ... */
         :root {
             --bg-deep: #06060f;
             --bg-panel: rgba(10, 12, 28, 0.92);
@@ -47,7 +48,6 @@
             -webkit-tap-highlight-color: transparent;
         }
 
-        /* Scrollbar */
         ::-webkit-scrollbar {
             width: 4px;
             height: 4px;
@@ -76,7 +76,6 @@
             color: inherit;
         }
 
-        /* Landing Page */
         .landing-page {
             position: fixed;
             inset: 0;
@@ -198,7 +197,6 @@
             color: var(--text-dim);
         }
 
-        /* Main App */
         .app-container {
             position: fixed;
             inset: 0;
@@ -223,7 +221,6 @@
             touch-action: none;
         }
 
-        /* Overlay UI */
         .overlay-top {
             position: absolute;
             top: 0;
@@ -309,7 +306,6 @@
             animation: none;
         }
 
-        /* Search */
         .search-container {
             position: relative;
             min-width: 220px;
@@ -430,7 +426,6 @@
             color: var(--text-dim);
         }
 
-        /* Profile Popup */
         .profile-popup-overlay {
             position: fixed;
             inset: 0;
@@ -599,7 +594,6 @@
             padding-right: 0.25rem;
         }
 
-        /* Orbit Mode Panel */
         .orbit-panel {
             position: absolute;
             bottom: 1.5rem;
@@ -680,7 +674,6 @@
             color: var(--text-primary);
         }
 
-        /* Time Travel Slider */
         .time-slider-container {
             position: absolute;
             bottom: 1.5rem;
@@ -746,7 +739,6 @@
             white-space: nowrap;
         }
 
-        /* Hint Text */
         .hint-text {
             position: absolute;
             bottom: 5.5rem;
@@ -765,7 +757,6 @@
             opacity: 0;
         }
 
-        /* Mobile Responsive */
         @media (max-width: 600px) {
             .overlay-top {
                 padding: 0.7rem 0.8rem;
@@ -1031,7 +1022,6 @@
 
             _processEvent(event) {
                 if (!event || !event.kind) return;
-                // Deduplicate
                 if (this.events.some(e => e.id === event.id)) return;
                 this.events.push(event);
                 if (this.events.length > MAX_EVENTS) {
@@ -1058,27 +1048,20 @@
             }
 
             async _fetchData() {
-                // Fetch profiles (kind 0)
                 const profileSub = this._subscribe([
                     { kinds: [0], limit: MAX_PROFILES }
                 ]);
-
-                // Fetch notes (kind 1)
                 const notesSub = this._subscribe([
                     { kinds: [1], limit: MAX_EVENTS }
                 ]);
-
-                // Fetch reactions (kind 7)
                 const reactionSub = this._subscribe([
                     { kinds: [7], limit: 500 }
                 ]);
 
                 this.subscriptions.push(profileSub, notesSub, reactionSub);
 
-                // Wait a bit for events to arrive
                 await new Promise(resolve => setTimeout(resolve, 3000));
 
-                // Close subscriptions but keep connections for future use
                 this._closeSubscriptions();
             }
 
@@ -1138,12 +1121,10 @@
                 this.nodes = new Map();
                 this.edges = new Map();
 
-                // Add all profiles as nodes
                 for (const [pubkey, profile] of profilesMap) {
                     this.addNode(pubkey, profile);
                 }
 
-                // Also add nodes for pubkeys mentioned in events
                 for (const event of events) {
                     if (event.kind !== 1) continue;
                     for (const tag of event.tags) {
@@ -1156,7 +1137,6 @@
                     }
                 }
 
-                // Build edges from interactions
                 this._buildEdges(events);
                 this._initializePositions();
                 this._detectClusters();
@@ -1195,15 +1175,12 @@
                     if (event.kind !== 1) continue;
                     const authorPubkey = event.pubkey;
                     const mentionedPubkeys = new Set();
-                    const replyToPubkey = null;
 
-                    // Check for mentions and replies
                     for (const tag of event.tags) {
                         if (tag[0] === 'p' && tag[1]) {
                             mentionedPubkeys.add(tag[1]);
                         }
                         if (tag[0] === 'e' && tag[1]) {
-                            // Reply - find the author of the referenced event
                             const referencedEvent = events.find(e => e.id === tag[1]);
                             if (referencedEvent) {
                                 const refAuthor = referencedEvent.pubkey;
@@ -1214,19 +1191,16 @@
                         }
                     }
 
-                    // Mentions create connection
                     for (const mentioned of mentionedPubkeys) {
                         if (mentioned !== authorPubkey) {
                             this._addEdgeStrength(edgeStrength, authorPubkey, mentioned, 2);
                         }
                     }
 
-                    // Track activity
                     if (this.nodes.has(authorPubkey)) {
                         const node = this.nodes.get(authorPubkey);
                         node.activityCount++;
                         node.lastActivity = Math.max(node.lastActivity, event.created_at || Date.now());
-                        // Check for BCH activity
                         const content = (event.content || '').toLowerCase();
                         if (content.includes('#bch') || content.includes('#bitcoincash') ||
                             content.includes('#bchnostr') || content.includes('#cashtokens') ||
@@ -1236,7 +1210,6 @@
                     }
                 }
 
-                // Create edges from strength map
                 for (const [key, strength] of edgeStrength) {
                     const [a, b] = key.split('|');
                     if (a && b && a !== b) {
@@ -1244,7 +1217,6 @@
                     }
                 }
 
-                // Also add edges from reactions
                 for (const event of events) {
                     if (event.kind !== 7) continue;
                     const reactor = event.pubkey;
@@ -1257,7 +1229,6 @@
                     }
                 }
 
-                // Add remaining reaction edges
                 for (const [key, strength] of edgeStrength) {
                     const [a, b] = key.split('|');
                     if (a && b && a !== b && !this._hasEdge(a, b)) {
@@ -1280,7 +1251,6 @@
                 const key = [a, b].sort().join('|');
                 if (this.edges.has(key)) return;
                 this.edges.set(key, { source: a, target: b, strength: strength || 1 });
-                // Update node connections
                 if (this.nodes.has(a)) this.nodes.get(a).connections.set(b, strength || 1);
                 if (this.nodes.has(b)) this.nodes.get(b).connections.set(a, strength || 1);
             }
@@ -1303,21 +1273,17 @@
 
             _detectClusters() {
                 this.clusters = [];
-                // Simple community detection: label propagation
                 const labels = new Map();
                 let labelCounter = 0;
                 const nodeList = Array.from(this.nodes.keys());
 
-                // Initialize each node with unique label
                 for (const pubkey of nodeList) {
                     labels.set(pubkey, labelCounter++);
                 }
 
-                // Propagate labels based on connections
                 const maxIterations = 30;
                 for (let iter = 0; iter < maxIterations; iter++) {
                     let changed = false;
-                    // Shuffle for randomness
                     const shuffled = [...nodeList].sort(() => Math.random() - 0.5);
                     for (const pubkey of shuffled) {
                         const node = this.nodes.get(pubkey);
@@ -1346,19 +1312,16 @@
                     if (!changed) break;
                 }
 
-                // Group by labels
                 const clusterGroups = new Map();
                 for (const [pubkey, label] of labels) {
                     if (!clusterGroups.has(label)) clusterGroups.set(label, []);
                     clusterGroups.get(label).push(pubkey);
                 }
 
-                // Filter meaningful clusters (size >= 3)
                 for (const [, members] of clusterGroups) {
                     if (members.length >= 3) {
                         const clusterId = `cluster_${this.clusters.length}`;
                         const clusterNodeIds = new Set(members);
-                        // Calculate cluster center
                         let cx = 0,
                             cy = 0;
                         for (const pubkey of members) {
@@ -1374,7 +1337,6 @@
                             center: { x: cx, y: cy },
                             name: `Possible community cluster ${this.clusters.length + 1}`,
                         });
-                        // Assign cluster to nodes
                         for (const pubkey of members) {
                             if (this.nodes.has(pubkey)) {
                                 this.nodes.get(pubkey).cluster = clusterId;
@@ -1383,7 +1345,6 @@
                     }
                 }
 
-                // Limit number of clusters
                 if (this.clusters.length > 12) {
                     this.clusters = this.clusters.slice(0, 12);
                 }
@@ -1393,9 +1354,8 @@
                 if (this.settled || this.nodes.size === 0) return;
                 const nodesArray = Array.from(this.nodes.keys());
                 const n = nodesArray.length;
-
-                // Repulsion between all pairs
                 const repulsionStrength = 12000;
+
                 for (let i = 0; i < n; i++) {
                     const a = nodesArray[i];
                     const posA = this.nodePositions.get(a);
@@ -1408,7 +1368,6 @@
                         const dy = posA.y - posB.y;
                         const distSq = dx * dx + dy * dy;
                         if (distSq < 1) {
-                            // Reposition slightly
                             posA.x += (Math.random() - 0.5) * 2;
                             posA.y += (Math.random() - 0.5) * 2;
                             continue;
@@ -1427,7 +1386,6 @@
                     }
                 }
 
-                // Attraction along edges
                 const attractionStrength = 0.06;
                 for (const [key, edge] of this.edges) {
                     const posA = this.nodePositions.get(edge.source);
@@ -1448,7 +1406,6 @@
                         velB.vy += fy; }
                 }
 
-                // Center gravity
                 const centerGravity = 0.004;
                 for (const pubkey of nodesArray) {
                     const pos = this.nodePositions.get(pubkey);
@@ -1458,7 +1415,6 @@
                     vel.vy -= pos.y * centerGravity;
                 }
 
-                // Apply velocities with damping
                 const damping = 0.85;
                 let maxMovement = 0;
                 for (const pubkey of nodesArray) {
@@ -1548,12 +1504,11 @@
         // ──────────────────────────────────────────────
         const app = createApp({
             setup() {
-                // State
                 const showLanding = ref(true);
                 const isConnected = ref(false);
                 const isConnecting = ref(false);
                 const statusText = ref('Connecting...');
-                const statusType = ref('connecting'); // 'connecting' | 'connected' | 'error'
+                const statusType = ref('connecting');
                 const searchQuery = ref('');
                 const searchResultsList = ref([]);
                 const searchVisible = ref(false);
@@ -1565,7 +1520,6 @@
                 const timeSliderValue = ref(100);
                 const hintVisible = ref(true);
 
-                // Data
                 const galaxyGraph = new GalaxyGraph();
                 const relayManager = new RelayManager();
                 let canvas = null;
@@ -1585,7 +1539,6 @@
                 let eventTimes = [];
                 let showTimeSlider = false;
 
-                // NIP-19 utilities
                 function encodeNpub(pubkey) {
                     try {
                         return nostrTools.nip19.npubEncode(pubkey);
@@ -1613,7 +1566,6 @@
                     }
                 }
 
-                // Landing page stars
                 function generateLandingStars() {
                     const container = document.getElementById('landingStars');
                     if (!container) return;
@@ -1629,7 +1581,6 @@
                     }
                 }
 
-                // Enter galaxy
                 function enterGalaxy() {
                     showLanding.value = false;
                     const appContainer = document.getElementById('appContainer');
@@ -1642,7 +1593,6 @@
                     }, 100);
                 }
 
-                // Initialize canvas
                 function initCanvas() {
                     canvas = document.getElementById('galaxyCanvas');
                     if (!canvas) return;
@@ -1650,7 +1600,6 @@
                     resizeCanvas();
                     window.addEventListener('resize', resizeCanvas);
 
-                    // Canvas event listeners
                     canvas.addEventListener('wheel', handleWheel, { passive: false });
                     canvas.addEventListener('mousedown', handleMouseDown);
                     canvas.addEventListener('mousemove', handleMouseMove);
@@ -1677,7 +1626,6 @@
                     if (ctx) ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
                 }
 
-                // Nostr connection
                 async function connectToNostr() {
                     isConnecting.value = true;
                     statusType.value = 'connecting';
@@ -1701,7 +1649,6 @@
                         }
                     };
                     relayManager.onDataUpdate = (event, profiles) => {
-                        // Update graph when new data arrives
                         if (profiles.size > 0) {
                             galaxyGraph.buildFromData(new Map(profiles), relayManager.events);
                             collectEventTimes();
@@ -1730,7 +1677,6 @@
                 }
 
                 function loadMockData() {
-                    // Generate mock data for demo purposes
                     const mockProfiles = new Map();
                     const mockEvents = [];
                     const mockUsers = [
@@ -1744,7 +1690,6 @@
                         mockProfiles.set(user.pubkey, user);
                     }
 
-                    // Generate mock events with interactions
                     const now = Math.floor(Date.now() / 1000);
                     const mockEventTemplates = [
                         { author: mockUsers[0].pubkey, mentions: [mockUsers[1].pubkey], content: 'Hey Bob! Great work on the new #BCH project! #bchnostr' },
@@ -1768,7 +1713,6 @@
                         });
                     }
 
-                    // Add some reactions
                     for (let i = 0; i < 6; i++) {
                         const reactor = mockUsers[i % mockUsers.length];
                         const target = mockUsers[(i + 1) % mockUsers.length];
@@ -1792,17 +1736,15 @@
                     isConnected.value = true;
                 }
 
-                // Force simulation loop
                 function startForceSimulation() {
                     if (forceIntervalId) clearInterval(forceIntervalId);
                     forceIntervalId = setInterval(() => {
                         if (galaxyGraph.nodes.size > 0 && !galaxyGraph.settled) {
                             galaxyGraph.forceTick(1.0);
                         }
-                    }, 33); // ~30fps simulation
+                    }, 33);
                 }
 
-                // Animation loop
                 function startAnimationLoop() {
                     lastFrameTime = performance.now();
 
@@ -1812,7 +1754,6 @@
 
                         renderCanvas(dt);
 
-                        // Update status text with elapsed time
                         if (isConnected.value && statusType.value === 'connected') {
                             const elapsed = Math.floor((Date.now() - connectedAtTime) / 1000);
                             if (elapsed >= 0 && relayManager.events.length > 0) {
@@ -1825,7 +1766,6 @@
                     animationId = requestAnimationFrame(animate);
                 }
 
-                // Canvas rendering
                 function renderCanvas(dt) {
                     if (!ctx || !canvas) return;
                     const { width, height } = canvasSize;
@@ -1833,7 +1773,6 @@
 
                     ctx.clearRect(0, 0, width, height);
 
-                    // Background
                     const bgGradient = ctx.createRadialGradient(width / 2, height / 2, 0, width / 2, height / 2, Math
                         .max(width, height) * 0.7);
                     bgGradient.addColorStop(0, '#0a0a1e');
@@ -1842,28 +1781,20 @@
                     ctx.fillStyle = bgGradient;
                     ctx.fillRect(0, 0, width, height);
 
-                    // Background stars
                     drawBackgroundStars(width, height);
 
-                    // Apply camera transform
                     ctx.save();
                     const centerX = width / 2 + camera.x;
                     const centerY = height / 2 + camera.y;
                     ctx.translate(centerX, centerY);
                     ctx.scale(camera.zoom, camera.zoom);
 
-                    // Draw edges
                     drawEdges();
-
-                    // Draw cluster labels
                     drawClusterLabels();
-
-                    // Draw nodes
                     drawNodes(dt);
 
                     ctx.restore();
 
-                    // Draw hover tooltip
                     if (hoveredPubkey && galaxyGraph.nodes.has(hoveredPubkey)) {
                         const node = galaxyGraph.nodes.get(hoveredPubkey);
                         const pos = galaxyGraph.nodePositions.get(hoveredPubkey);
@@ -1914,7 +1845,6 @@
                         const lineWidth = Math.min(0.5 + strength * 0.5, 3);
                         const alpha = Math.min(0.15 + strength * 0.1, 0.5);
 
-                        // Glowing connection for strong edges
                         if (strength >= 3) {
                             ctx.shadowColor = 'rgba(160,128,224,0.4)';
                             ctx.shadowBlur = 8;
@@ -1963,10 +1893,9 @@
 
                         const radius = getNodeRadius(node);
                         const colors = galaxyGraph.getNodeColors(pubkey, currentTime);
-                        const isActive = currentTime - (node.lastActivity * 1000) < 3600 * 1000; // active in last hour
+                        const isActive = currentTime - (node.lastActivity * 1000) < 3600 * 1000;
                         const isHovered = hoveredPubkey === pubkey;
 
-                        // Glow effect
                         const glowRadius = radius * (1.5 + timePulse * 0.3 * (isActive ? 1 : 0.3));
                         const glowAlpha = isActive ? 0.5 + timePulse * 0.3 : 0.25;
                         const glowGradient = ctx.createRadialGradient(pos.x, pos.y, radius * 0.3, pos.x, pos.y, glowRadius);
@@ -1977,7 +1906,6 @@
                         ctx.arc(pos.x, pos.y, glowRadius, 0, Math.PI * 2);
                         ctx.fill();
 
-                        // Avatar circle
                         const avatarRadius = radius * 0.65;
                         const avatar = avatarCache.get(pubkey);
                         if (avatar && avatar.complete && avatar.naturalWidth > 0) {
@@ -1989,9 +1917,8 @@
                                 avatarRadius * 2);
                             ctx.restore();
                         } else {
-                            // Fallback: colored circle with initial
                             const initial = (node.displayName || node.name || '?')[0].toUpperCase();
-                            const hue = this._stringToHue(pubkey);
+                            const hue = _stringToHue(pubkey);
                             ctx.fillStyle = `hsl(${hue}, 45%, 35%)`;
                             ctx.beginPath();
                             ctx.arc(pos.x, pos.y, avatarRadius, 0, Math.PI * 2);
@@ -2003,14 +1930,12 @@
                             ctx.fillText(initial, pos.x, pos.y + 1);
                         }
 
-                        // Border ring
                         ctx.strokeStyle = colors.border;
                         ctx.lineWidth = isHovered ? 2.5 : 1.8;
                         ctx.beginPath();
                         ctx.arc(pos.x, pos.y, avatarRadius + 1, 0, Math.PI * 2);
                         ctx.stroke();
 
-                        // Outer ring for active users
                         if (isActive) {
                             ctx.strokeStyle = `rgba(94,224,138,${0.4 + timePulse * 0.4})`;
                             ctx.lineWidth = 1.2;
@@ -2021,19 +1946,16 @@
                             ctx.setLineDash([]);
                         }
 
-                        // Display name
                         const labelY = pos.y + radius + 16;
                         ctx.font = '500 10.5px Inter, sans-serif';
                         ctx.textAlign = 'center';
                         ctx.textBaseline = 'top';
                         const labelWidth = ctx.measureText(node.displayName).width;
-                        // Background for readability
                         ctx.fillStyle = 'rgba(6,6,15,0.7)';
                         ctx.fillRect(pos.x - labelWidth / 2 - 4, labelY - 1, labelWidth + 8, 14);
                         ctx.fillStyle = '#c8c4e0';
                         ctx.fillText(node.displayName, pos.x, labelY);
 
-                        // Activity indicator dot
                         if (isActive) {
                             ctx.fillStyle = `rgba(94,224,138,${0.7 + timePulse * 0.3})`;
                             ctx.beginPath();
@@ -2051,12 +1973,10 @@
                     return hash % 360;
                 }
 
-                // Camera controls
                 function handleWheel(e) {
                     e.preventDefault();
                     const delta = e.deltaY > 0 ? 0.9 : 1.1;
                     const newZoom = Math.max(0.15, Math.min(4, camera.zoom * delta));
-                    // Zoom toward cursor
                     const rect = canvas.getBoundingClientRect();
                     const mouseX = e.clientX - rect.left;
                     const mouseY = e.clientY - rect.top;
@@ -2084,7 +2004,6 @@
                         camera.x = dragCameraStart.x + dx;
                         camera.y = dragCameraStart.y + dy;
                     } else {
-                        // Hover detection
                         const worldX = (mousePos.x - canvasSize.width / 2 - camera.x) / camera.zoom;
                         const worldY = (mousePos.y - canvasSize.height / 2 - camera.y) / camera.zoom;
                         const nodeRadius = 35;
@@ -2120,7 +2039,6 @@
                     }
                 }
 
-                // Touch events
                 let touchStartData = null;
                 let lastTouchDistance = 0;
 
@@ -2164,7 +2082,6 @@
                     if (e.touches.length === 0) {
                         isDragging = false;
                         lastTouchDistance = 0;
-                        // Check for tap
                         if (touchStartData && Math.abs(touchStartData.x - mousePos.x) < 10 && Math.abs(touchStartData
                                 .y - mousePos.y) < 10) {
                             const worldX = (touchStartData.x - canvasSize.width / 2 - camera.x) / camera.zoom;
@@ -2178,14 +2095,12 @@
                     }
                 }
 
-                // Profile Popup
                 function openProfilePopup(pubkey) {
                     const node = galaxyGraph.nodes.get(pubkey);
                     if (!node) return;
                     selectedPubkey.value = pubkey;
                     popupVisible.value = true;
 
-                    // Populate popup
                     const popupName = document.getElementById('popupName');
                     const popupDisplay = document.getElementById('popupDisplay');
                     const popupAvatar = document.getElementById('popupAvatar');
@@ -2237,7 +2152,6 @@
 
                     document.getElementById('profilePopupOverlay').style.display = 'flex';
 
-                    // Load avatar if needed
                     if (node.picture && !avatarCache.has(pubkey)) {
                         const img = new Image();
                         img.crossOrigin = 'anonymous';
@@ -2255,9 +2169,7 @@
                                 popupAvatar.appendChild(newImg);
                             }
                         };
-                        img.onerror = () => {
-                            // Keep fallback
-                        };
+                        img.onerror = () => {};
                     }
                 }
 
@@ -2285,7 +2197,6 @@
                     document.getElementById('orbitPanel').classList.remove('visible');
                 }
 
-                // Search
                 function handleSearch(query) {
                     searchQuery.value = query;
                     if (!query || query.trim().length < 2) {
@@ -2322,7 +2233,6 @@
                     const pos = galaxyGraph.nodePositions.get(pubkey);
                     if (!pos) return;
 
-                    // Animate camera to center on this node
                     const targetX = -pos.x * camera.zoom;
                     const targetY = -pos.y * camera.zoom;
                     const targetZoom = Math.max(1.5, camera.zoom);
@@ -2336,7 +2246,7 @@
                     function animateCamera(now) {
                         const elapsed = now - startTime;
                         const progress = Math.min(elapsed / duration, 1);
-                        const eased = 1 - Math.pow(1 - progress, 3); // easeOutCubic
+                        const eased = 1 - Math.pow(1 - progress, 3);
 
                         camera.x = startX + (targetX - startX) * eased;
                         camera.y = startY + (targetY - startY) * eased;
@@ -2348,14 +2258,12 @@
                     }
                     requestAnimationFrame(animateCamera);
 
-                    // Briefly highlight the node
                     hoveredPubkey = pubkey;
                     setTimeout(() => {
                         if (hoveredPubkey === pubkey) hoveredPubkey = null;
                     }, 1500);
                 }
 
-                // Time travel
                 function handleTimeSlider(value) {
                     timeSliderValue.value = parseInt(value);
                     const slider = document.getElementById('timeSlider');
@@ -2364,7 +2272,6 @@
 
                     if (timeSliderValue.value >= 99) {
                         label.textContent = 'Now';
-                        // Show all events
                         galaxyGraph.buildFromData(
                             new Map(relayManager.profiles.size > 0 ? relayManager.profiles : getCurrentProfilesMap()),
                             relayManager.events.length > 0 ? relayManager.events : getMockEvents()
@@ -2396,7 +2303,6 @@
                             } catch { /* ignore */ }
                         }
                     }
-                    // Include profiles from relayManager as well
                     for (const [pubkey, profile] of relayManager.profiles) {
                         if (!profilesMap.has(pubkey)) {
                             profilesMap.set(pubkey, profile);
@@ -2413,27 +2319,88 @@
                     return relayManager.events;
                 }
 
-                // Watch for popup close
                 watch(popupVisible, (val) => {
                     if (!val) {
-                        document.getElementById('profilePopupOverlay').style.display = 'none';
+                        const overlay = document.getElementById('profilePopupOverlay');
+                        if (overlay) overlay.style.display = 'none';
                     }
                 });
 
-                // Watch for orbit close
                 watch(orbitMode, (val) => {
                     if (!val) {
-                        document.getElementById('orbitPanel').classList.remove('visible');
+                        const panel = document.getElementById('orbitPanel');
+                        if (panel) panel.classList.remove('visible');
                     }
                 });
 
-                // Mount
+                const searchResultsHtml = computed(() => {
+                    return searchResultsList.value.map(r => `
+                        <div class="search-result-item" data-pubkey="${r.pubkey}">
+                            <div class="search-result-avatar">${(r.name || '?')[0].toUpperCase()}</div>
+                            <div class="search-result-info">
+                                <div class="search-result-name">${r.name}</div>
+                                <div class="search-result-npub">${r.npub.slice(0, 16)}...</div>
+                            </div>
+                            ${r.isVerified ? '<span class="search-result-badge">✓ NIP-05</span>' : ''}
+                        </div>
+                    `).join('');
+                });
+
+                watch(searchResultsHtml, (html) => {
+                    const container = document.getElementById('searchResults');
+                    if (container) {
+                        container.innerHTML = html || '<div class="search-result-empty">No users found</div>';
+                        container.classList.toggle('visible', searchVisible.value);
+                    }
+                });
+
+                watch(searchVisible, (val) => {
+                    const container = document.getElementById('searchResults');
+                    if (container) container.classList.toggle('visible', val);
+                });
+
+                if (!CanvasRenderingContext2D.prototype.roundRect) {
+                    CanvasRenderingContext2D.prototype.roundRect = function(x, y, w, h, r) {
+                        if (typeof r === 'number') r = { tl: r, tr: r, br: r, bl: r };
+                        this.beginPath();
+                        this.moveTo(x + r.tl, y);
+                        this.lineTo(x + w - r.tr, y);
+                        this.quadraticCurveTo(x + w, y, x + w, y + r.tr);
+                        this.lineTo(x + w, y + h - r.br);
+                        this.quadraticCurveTo(x + w, y + h, x + w - r.br, y + h);
+                        this.lineTo(x + r.bl, y + h);
+                        this.quadraticCurveTo(x, y + h, x, y + h - r.bl);
+                        this.lineTo(x, y + r.tl);
+                        this.quadraticCurveTo(x, y, x + r.tl, y);
+                        this.closePath();
+                    };
+                }
+
+                // ──────────────────────────────────────────────
+                // DOM READY SAFE EVENT BINDING
+                // ──────────────────────────────────────────────
+                function safeAddEvent(id, event, handler) {
+                    const el = document.getElementById(id);
+                    if (el) {
+                        el.addEventListener(event, handler);
+                    } else {
+                        console.warn(`Element #${id} not found, retrying in 100ms...`);
+                        setTimeout(() => {
+                            const retryEl = document.getElementById(id);
+                            if (retryEl) retryEl.addEventListener(event, handler);
+                            else console.error(`Element #${id} still not found`);
+                        }, 100);
+                    }
+                }
+
                 onMounted(() => {
                     generateLandingStars();
-                    document.getElementById('enterGalaxyBtn').addEventListener('click', enterGalaxy);
-                    document.getElementById('profilePopupClose').addEventListener('click', closePopup);
-                    document.getElementById('popupOrbitBtn').addEventListener('click', openOrbitMode);
-                    document.getElementById('orbitClose').addEventListener('click', closeOrbitMode);
+
+                    // Safe event binding with null checks
+                    safeAddEvent('enterGalaxyBtn', 'click', enterGalaxy);
+                    safeAddEvent('profilePopupClose', 'click', closePopup);
+                    safeAddEvent('popupOrbitBtn', 'click', openOrbitMode);
+                    safeAddEvent('orbitClose', 'click', closeOrbitMode);
 
                     const searchInput = document.getElementById('searchInput');
                     if (searchInput) {
@@ -2461,7 +2428,6 @@
                         timeSlider.addEventListener('input', (e) => handleTimeSlider(e.target.value));
                     }
 
-                    // Hide hint after a while
                     setTimeout(() => {
                         const hint = document.getElementById('hintText');
                         if (hint) hint.classList.add('fading');
@@ -2474,51 +2440,6 @@
                     relayManager.disconnect();
                     window.removeEventListener('resize', resizeCanvas);
                 });
-
-                // For search results rendering
-                const searchResultsHtml = computed(() => {
-                    return searchResultsList.value.map(r => `
-                        <div class="search-result-item" data-pubkey="${r.pubkey}">
-                            <div class="search-result-avatar">${(r.name || '?')[0].toUpperCase()}</div>
-                            <div class="search-result-info">
-                                <div class="search-result-name">${r.name}</div>
-                                <div class="search-result-npub">${r.npub.slice(0, 16)}...</div>
-                            </div>
-                            ${r.isVerified ? '<span class="search-result-badge">✓ NIP-05</span>' : ''}
-                        </div>
-                    `).join('');
-                });
-
-                watch(searchResultsHtml, (html) => {
-                    const container = document.getElementById('searchResults');
-                    if (container) {
-                        container.innerHTML = html || '<div class="search-result-empty">No users found</div>';
-                        container.classList.toggle('visible', searchVisible.value);
-                    }
-                });
-
-                watch(searchVisible, (val) => {
-                    const container = document.getElementById('searchResults');
-                    if (container) container.classList.toggle('visible', val);
-                });
-
-                // Add roundRect polyfill if needed
-                if (!CanvasRenderingContext2D.prototype.roundRect) {
-                    CanvasRenderingContext2D.prototype.roundRect = function(x, y, w, h, r) {
-                        if (typeof r === 'number') r = { tl: r, tr: r, br: r, bl: r };
-                        this.beginPath();
-                        this.moveTo(x + r.tl, y);
-                        this.lineTo(x + w - r.tr, y);
-                        this.quadraticCurveTo(x + w, y, x + w, y + r.tr);
-                        this.lineTo(x + w, y + h - r.br);
-                        this.quadraticCurveTo(x + w, y + h, x + w - r.br, y + h);
-                        this.lineTo(x + r.bl, y + h);
-                        this.quadraticCurveTo(x, y + h, x, y + h - r.bl);
-                        this.lineTo(x, y + r.tl);
-                        this.quadraticCurveTo(x, y, x + r.tl, y);
-                        this.closePath();
-                    };
-                }
 
                 return {
                     showLanding,
@@ -2548,7 +2469,6 @@
             template: `<!-- Template managed via direct DOM manipulation for canvas-based rendering -->`,
         });
 
-        // Mount app
         app.mount('#appContainer');
         console.log('🌌 Nostr Galaxy Map initialized');
     </script>
