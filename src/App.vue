@@ -1,23 +1,62 @@
 <script setup>
-import { ref, reactive, computed, onBeforeUnmount } from 'vue'
+import { ref, reactive, computed, onBeforeUnmount, onMounted } from 'vue'
 import GalaxyView from './components/GalaxyView.vue'
 import ProfilePopup from './components/ProfilePopup.vue'
 import SearchBox from './components/SearchBox.vue'
 import { RelayPool, DEFAULT_RELAYS, resolveToHex, hexToNpub } from './nostr.js'
 import { buildGalaxy, layoutGalaxy, detectConstellations } from './galaxy.js'
 
-// --- configurable MVP limits (spec: "Do NOT load the entire Nostr network") ---
-const MAX_PROFILES = 500
-const MAX_EVENTS = 5000
+// --- runtime configuration ---
+// Loaded from public/config.json at startup so relays, the NostrCard
+// domain, and load limits can be changed without a rebuild. These are
+// the fallback defaults if that fetch fails for any reason (offline,
+// missing file, etc).
+const config = reactive({
+  relays: DEFAULT_RELAYS,
+  nostrCardBaseUrl: 'https://nostrcard.vercel.app/#/p/',
+  maxProfiles: 500,
+  maxEvents: 5000,
+  initialProfileLimit: 120,
+  initialNoteLimit: 400,
+  initialRepostLimit: 150,
+  initialReactionLimit: 250,
+  loadMoreStep: 120
+})
+const configLoaded = ref(false)
+
+async function loadConfig() {
+  try {
+    const res = await fetch(`${import.meta.env.BASE_URL}config.json`)
+    if (res.ok) {
+      const data = await res.json()
+      Object.assign(config, data)
+    }
+  } catch {
+    // Fall back silently to the defaults above — this is read-only
+    // convenience config, never a hard dependency.
+  } finally {
+    configLoaded.value = true
+  }
+}
+onMounted(loadConfig)
+
+// Loading is staged/lazy: a small first batch renders fast, and further
+// batches only load when the person asks for more — never one huge
+// up-front pull that hangs the tab while hundreds of accounts arrive.
 
 const screen = ref('landing') // 'landing' | 'galaxy'
 const connection = reactive({ state: 'idle', lastUpdate: null, error: null }) // idle | connecting | connected | failed
+const loadedProfileCount = ref(0)
+const canLoadMore = computed(() => loadedProfileCount.value < config.maxProfiles && eventCount < config.maxEvents)
+const loadingMore = ref(false)
 
 const rawProfiles = new Map() // pubkey -> kind0 event
 const rawNotes = []
 const rawReposts = []
 const rawReactions = []
 let eventCount = 0
+let oldestNoteSeen = null // for paging "load more" further back in time
+let positionCache = new Map() // id -> {x, y, vx, vy} — carried across rebuilds so existing stars don't get re-simulated from scratch on every batch
 
 const nodes = ref([])
 const edges = ref([])
@@ -35,10 +74,12 @@ let rebuildTimer = null
 
 function scheduleRebuild() {
   if (rebuildTimer) return
+  // A slightly longer debounce than a single event burst, so a fast stream
+  // of incoming events collapses into one layout pass instead of many.
   rebuildTimer = setTimeout(() => {
     rebuildTimer = null
     rebuild()
-  }, 900)
+  }, 1200)
 }
 
 function rebuild() {
@@ -48,11 +89,19 @@ function rebuild() {
     reposts: rawReposts,
     reactions: rawReactions
   })
-  const laidOut = layoutGalaxy(n, e, { width: 2200, height: 1600 })
+  const laidOut = layoutGalaxy(n, e, { width: 2200, height: 1600, previous: positionCache })
+
+  // Warm cache for next time: only positions, not the whole node payload.
+  const nextCache = new Map()
+  for (const node of laidOut) nextCache.set(node.id, { x: node.x, y: node.y, vx: node.vx, vy: node.vy })
+  positionCache = nextCache
+
   nodes.value = laidOut
   edges.value = e
   constellations.value = detectConstellations(laidOut, e)
   connection.lastUpdate = Date.now()
+  loadedProfileCount.value = rawProfiles.size
+  loadingMore.value = false
   // keep selection pointing at the freshest copy of the same node
   if (selectedNode.value) {
     const fresh = laidOut.find((x) => x.id === selectedNode.value.id)
@@ -68,7 +117,7 @@ function enterGalaxy() {
 function connectToRelays() {
   connection.state = 'connecting'
   connection.error = null
-  pool = new RelayPool(DEFAULT_RELAYS)
+  pool = new RelayPool(config.relays)
   pool.onStatusChange = (summary) => {
     const values = Object.values(summary)
     if (values.some((s) => s === 'open')) connection.state = 'connected'
@@ -79,9 +128,11 @@ function connectToRelays() {
   }
   pool.connect()
 
-  pool.subscribe([{ kinds: [0], limit: MAX_PROFILES }], {
+  // First pass: a small, fast batch so the galaxy renders quickly.
+  // Larger batches are only pulled in later, on request (see loadMore()).
+  pool.subscribe([{ kinds: [0], limit: config.initialProfileLimit }], {
     onEvent: (event) => {
-      if (eventCount > MAX_EVENTS) return
+      if (eventCount > config.maxEvents) return
       const existing = rawProfiles.get(event.pubkey)
       if (!existing || existing.created_at < event.created_at) {
         rawProfiles.set(event.pubkey, event)
@@ -91,32 +142,72 @@ function connectToRelays() {
     }
   })
 
-  pool.subscribe([{ kinds: [1], limit: 2000 }], {
+  pool.subscribe([{ kinds: [1], limit: config.initialNoteLimit }], {
     onEvent: (event) => {
-      if (eventCount > MAX_EVENTS) return
+      if (eventCount > config.maxEvents) return
       rawNotes.push(event)
+      oldestNoteSeen = oldestNoteSeen ? Math.min(oldestNoteSeen, event.created_at) : event.created_at
       eventCount++
       scheduleRebuild()
     }
   })
 
-  pool.subscribe([{ kinds: [6], limit: 500 }], {
+  pool.subscribe([{ kinds: [6], limit: config.initialRepostLimit }], {
     onEvent: (event) => {
-      if (eventCount > MAX_EVENTS) return
+      if (eventCount > config.maxEvents) return
       rawReposts.push(event)
       eventCount++
       scheduleRebuild()
     }
   })
 
-  pool.subscribe([{ kinds: [7], limit: 1000 }], {
+  pool.subscribe([{ kinds: [7], limit: config.initialReactionLimit }], {
     onEvent: (event) => {
-      if (eventCount > MAX_EVENTS) return
+      if (eventCount > config.maxEvents) return
       rawReactions.push(event)
       eventCount++
       scheduleRebuild()
     }
   })
+}
+
+// Pulls in the next slice of the universe — older profiles and notes —
+// instead of the first load trying to swallow the whole network at once.
+// Existing stars keep their settled position (see the position cache in
+// rebuild()), so this only costs simulation time for what's actually new.
+function loadMore() {
+  if (!pool || loadingMore.value || !canLoadMore.value) return
+  loadingMore.value = true
+
+  const profileSub = pool.subscribe([{ kinds: [0], limit: config.loadMoreStep }], {
+    onEvent: (event) => {
+      if (eventCount > config.maxEvents) return
+      const existing = rawProfiles.get(event.pubkey)
+      if (!existing || existing.created_at < event.created_at) {
+        rawProfiles.set(event.pubkey, event)
+        eventCount++
+        scheduleRebuild()
+      }
+    },
+    onEose: () => pool?.close(profileSub)
+  })
+
+  const noteFilter = oldestNoteSeen
+    ? { kinds: [1], limit: config.loadMoreStep, until: oldestNoteSeen - 1 }
+    : { kinds: [1], limit: config.loadMoreStep }
+  const noteSub = pool.subscribe([noteFilter], {
+    onEvent: (event) => {
+      if (eventCount > config.maxEvents) return
+      rawNotes.push(event)
+      oldestNoteSeen = oldestNoteSeen ? Math.min(oldestNoteSeen, event.created_at) : event.created_at
+      eventCount++
+      scheduleRebuild()
+    },
+    onEose: () => pool?.close(noteSub)
+  })
+
+  // Safety net: stop showing "loading" even if a relay never sends EOSE.
+  setTimeout(() => (loadingMore.value = false), 6000)
 }
 
 onBeforeUnmount(() => {
@@ -316,6 +407,14 @@ function displayEdges() {
       <button v-if="constellations.length" class="constellation-toggle" @click="showConstellations = !showConstellations">
         {{ constellations.length }} possible cluster{{ constellations.length === 1 ? '' : 's' }}
       </button>
+      <button
+        v-if="connection.state === 'connected' && canLoadMore"
+        class="constellation-toggle"
+        :disabled="loadingMore"
+        @click="loadMore"
+      >
+        {{ loadingMore ? 'Loading…' : 'Load more stars' }}
+      </button>
     </div>
 
     <div v-if="showConstellations" class="constellation-panel scroll-thin">
@@ -341,7 +440,7 @@ function displayEdges() {
 
     <!-- selected star popup -->
     <div v-if="selectedNode" class="popup-anchor">
-      <ProfilePopup :node="selectedNode" @close="closePopup" />
+      <ProfilePopup :node="selectedNode" :nostr-card-base-url="config.nostrCardBaseUrl" @close="closePopup" />
     </div>
   </div>
 </template>
@@ -582,6 +681,10 @@ function displayEdges() {
   border-radius: 999px;
   padding: 7px 12px;
   font-size: 11.5px;
+}
+.constellation-toggle:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 .constellation-panel {

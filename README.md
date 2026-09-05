@@ -38,36 +38,121 @@ npm run build      # production build in dist/
 npm run preview    # preview the production build locally
 ```
 
-## Deploying
+## Deploying to GitHub Pages
 
-**Vercel** — import the repo, framework preset "Vite", no config needed.
+A ready-made workflow at `.github/workflows/deploy.yml` builds the app and
+publishes it automatically on every push to `main` — no third-party
+service involved, just GitHub itself.
 
-**GitHub Pages** — `vite.config.js` already sets `base: './'` so a build
-works from a project subpath. Run `npm run build`, then publish the `dist/`
-folder (e.g. via the `gh-pages` package or a GitHub Actions workflow).
+1. **Push this project to a GitHub repo**, if you haven't already:
+   ```bash
+   cd nostr-galaxy-map
+   git init
+   git add .
+   git commit -m "Initial commit"
+   git branch -M main
+   git remote add origin https://github.com/<your-username>/<your-repo>.git
+   git push -u origin main
+   ```
+   (Skip `git init`/`branch`/`remote` if it's already a git repo — just
+   commit and push.)
 
-## Configuring relays and limits
+2. **Turn on Pages, pointed at GitHub Actions:**
+   In your repo, go to **Settings → Pages**. Under "Build and deployment",
+   set **Source** to **GitHub Actions**. That's it — no branch to pick, no
+   folder to configure.
 
-Edit `DEFAULT_RELAYS` in `src/nostr.js`:
+3. **Push (or re-push) to `main`.** That push triggers the workflow: it
+   runs `npm ci && npm run build`, then publishes the `dist/` folder. Watch
+   it run under the **Actions** tab in your repo — it takes under a
+   minute. When it finishes, your **Settings → Pages** page shows the live
+   URL, typically:
+   ```
+   https://<your-username>.github.io/<your-repo>/
+   ```
 
-```js
-const DEFAULT_RELAYS = [
-  'wss://relay.bchnostr.com',
-  'wss://relay.nos.lol',
-  'wss://relay.damus.io',
-  'wss://nos.lol'
-]
+4. **Future updates** — just `git push` to `main` again; the workflow
+   rebuilds and redeploys automatically. You can also trigger it manually
+   from the Actions tab (`workflow_dispatch` is enabled).
+
+Nothing else needs changing for this to work: `vite.config.js` already
+sets `base: './'`, so the build's asset paths are relative and work
+correctly from a project subpath like `/<your-repo>/` — no repo-name-specific
+config needed.
+
+If you'd rather not use Actions, the manual alternative is: run
+`npm run build` locally, then publish the `dist/` folder to a `gh-pages`
+branch (the `gh-pages` npm package automates this: `npx gh-pages -d dist`
+after installing it as a dev dependency) — but the Actions workflow above
+does the same thing automatically on every push, so most people won't need
+this.
+
+## Lazy loading
+
+The first load pulls a small batch (120 profiles, a few hundred recent
+notes/reposts/reactions) so the galaxy appears fast. A **"Load more stars"**
+control (bottom right, once connected) pulls in the next slice — older
+profiles, and notes paged further back in time via `until` — up to the
+`MAX_PROFILES` / `MAX_EVENTS` ceiling. Nothing pulls in the whole network
+up front.
+
+Two more things keep it smooth as the galaxy grows:
+
+- **Warm-started layout** — `layoutGalaxy` *pins* each star's previous
+  position across rebuilds (d3's `fx`/`fy`) instead of merely reheating it,
+  so already-placed stars hold completely still once settled — only
+  genuinely new stars are free to move into place. This is also why
+  tapping a star reliably selects it now, instead of chasing a star that's
+  still drifting from the last batch.
+- **Viewport culling** — `GalaxyView.vue` only mounts stars that are
+  actually on screen (plus a small margin), with a hard ceiling
+  (`MAX_RENDERED_STARS`) if you're zoomed out far enough to see hundreds
+  at once. Panning/zooming re-derives the visible set cheaply; it never
+  re-renders the whole galaxy's worth of DOM nodes at once.
+
+## Mobile controls
+
+- **Drag** with one finger to pan, **pinch** to zoom.
+- **Twist with two fingers** to rotate the map (same gesture as Google/Apple
+  Maps) — a small compass in the middle-right edge shows the current
+  heading and resets rotation to north on tap.
+- On desktop, mouse-wheel zooms; **Shift + scroll** rotates.
+- Star collision spacing was widened and tap targets have a 40px minimum,
+  so accounts should no longer visually overlap or be hard to hit with a
+  finger.
+
+## Configuring relays, the NostrCard domain, and limits
+
+All of this lives in `public/config.json`, fetched at startup — so it can be
+edited (or swapped per deployment) **without a rebuild**:
+
+```json
+{
+  "relays": [
+    "wss://relay.bchnostr.com",
+    "wss://relay.nos.lol",
+    "wss://relay.damus.io",
+    "wss://nos.lol"
+  ],
+  "nostrCardBaseUrl": "https://nostrcard.vercel.app/#/p/",
+  "maxProfiles": 500,
+  "maxEvents": 5000,
+  "initialProfileLimit": 120,
+  "initialNoteLimit": 400,
+  "initialRepostLimit": 150,
+  "initialReactionLimit": 250,
+  "loadMoreStep": 120
+}
 ```
 
-One relay being offline never breaks the app — each relay connects
-independently and the pool merges + de-duplicates whatever comes back.
-
-MVP load limits live at the top of `src/App.vue`:
-
-```js
-const MAX_PROFILES = 500
-const MAX_EVENTS = 5000
-```
+- `nostrCardBaseUrl` is prepended to each user's `npub` when the "Open Full
+  NostrCard" button is built — it currently points at NostrCard's hash-route
+  pattern (`.../#/p/npub1...`); update it here if that ever changes.
+- If `config.json` is missing or fails to load (e.g. offline), the app falls
+  back to the defaults baked into `src/App.vue`, so it's never a hard
+  dependency.
+- One relay being offline never breaks the app — each relay connects
+  independently and the pool merges + de-duplicates whatever comes back.
 
 ## How the galaxy is built
 
@@ -103,6 +188,8 @@ src/
     StarNode.vue         a single glowing star
     ProfilePopup.vue     mini NostrCard preview + link to the full card
     SearchBox.vue        search by name / npub / nprofile / NIP-05
+public/
+  config.json          relays, NostrCard domain, load limits — edit without a rebuild
 ```
 
 ## Not included in this MVP

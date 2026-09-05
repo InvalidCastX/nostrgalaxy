@@ -2,7 +2,8 @@
 defineProps({
   node: { type: Object, required: true },
   radius: { type: Number, default: 18 },
-  selected: { type: Boolean, default: false }
+  selected: { type: Boolean, default: false },
+  rotation: { type: Number, default: 0 } // current galaxy rotation, in degrees — labels counter-rotate to stay upright
 })
 defineEmits(['select'])
 </script>
@@ -14,25 +15,28 @@ defineEmits(['select'])
     :style="{
       left: node.x + 'px',
       top: node.y + 'px',
-      '--r': radius + 'px'
+      '--r': radius + 'px',
+      '--label-rot': -rotation + 'deg'
     }"
     @click.stop="$emit('select', node)"
     :aria-label="node.name || 'unnamed Nostr identity'"
   >
-    <span class="star__glow" aria-hidden="true"></span>
-    <span class="star__body" aria-hidden="true">
-      <img
-        v-if="node.picture"
-        :src="node.picture"
-        class="star__avatar"
-        loading="lazy"
-        alt=""
-        @error="$event.target.style.display = 'none'"
-      />
-      <span v-else class="star__spark">✦</span>
+    <span class="star__visual">
+      <span class="star__glow" aria-hidden="true"></span>
+      <span class="star__body" aria-hidden="true">
+        <img
+          v-if="node.picture"
+          :src="node.picture"
+          class="star__avatar"
+          loading="lazy"
+          alt=""
+          @error="$event.target.style.display = 'none'"
+        />
+        <span v-else class="star__spark">✦</span>
+      </span>
+      <span v-if="node.nip05Verified" class="star__badge" aria-hidden="true">✓</span>
+      <span class="star__label">{{ node.name || node.id.slice(0, 8) }}</span>
     </span>
-    <span v-if="node.nip05Verified" class="star__badge" aria-hidden="true">✓</span>
-    <span class="star__label">{{ node.name || node.id.slice(0, 8) }}</span>
   </button>
 </template>
 
@@ -42,6 +46,8 @@ defineEmits(['select'])
   transform: translate(-50%, -50%);
   width: calc(var(--r) * 2);
   height: calc(var(--r) * 2);
+  min-width: 40px;
+  min-height: 40px;
   border: none;
   background: none;
   padding: 0;
@@ -52,9 +58,23 @@ defineEmits(['select'])
   touch-action: manipulation;
 }
 
+.star__visual {
+  position: relative;
+  width: calc(var(--r) * 2);
+  height: calc(var(--r) * 2);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .star__glow {
   position: absolute;
-  inset: -40%;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: calc(var(--r) * 2 * 1.4);
+  height: calc(var(--r) * 2 * 1.4);
   border-radius: 50%;
   filter: blur(6px);
   opacity: 0.55;
@@ -63,8 +83,9 @@ defineEmits(['select'])
 
 .star__body {
   position: relative;
-  width: 100%;
-  height: 100%;
+  width: calc(var(--r) * 2);
+  height: calc(var(--r) * 2);
+  flex-shrink: 0;
   border-radius: 50%;
   overflow: hidden;
   display: flex;
@@ -119,7 +140,8 @@ defineEmits(['select'])
   position: absolute;
   top: calc(100% + 4px);
   left: 50%;
-  transform: translateX(-50%);
+  transform: translateX(-50%) rotate(var(--label-rot, 0deg));
+  transform-origin: center top;
   font-size: 11px;
   color: var(--dim);
   white-space: nowrap;

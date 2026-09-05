@@ -4,7 +4,7 @@ import { hexToNpub } from '../nostr.js'
 
 const props = defineProps({
   node: { type: Object, required: true },
-  nostrCardBaseUrl: { type: String, default: 'https://nostrcard.vercel.app/p/' }
+  nostrCardBaseUrl: { type: String, default: 'https://nostrcard.vercel.app/#/p/' }
 })
 defineEmits(['close'])
 

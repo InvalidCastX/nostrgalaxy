@@ -1,0 +1,16 @@
+{
+  "relays": [
+    "wss://relay.bchnostr.com",
+    "wss://relay.nos.lol",
+    "wss://relay.damus.io",
+    "wss://nos.lol"
+  ],
+  "nostrCardBaseUrl": "https://nostrcard.vercel.app/#/p/",
+  "maxProfiles": 500,
+  "maxEvents": 5000,
+  "initialProfileLimit": 120,
+  "initialNoteLimit": 400,
+  "initialRepostLimit": 150,
+  "initialReactionLimit": 250,
+  "loadMoreStep": 120
+}

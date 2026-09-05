@@ -130,16 +130,34 @@ export function buildGalaxy({ profiles, notes = [], reposts = [], reactions = []
     }
   }
 
-  // --- shared-topic edges: light-weight, only for pairs with real overlap ---
-  const taggedNodes = [...nodes.values()].filter((n) => n.hashtags.size > 0)
-  for (let i = 0; i < taggedNodes.length; i++) {
-    for (let j = i + 1; j < taggedNodes.length; j++) {
-      const a = taggedNodes[i]
-      const b = taggedNodes[j]
-      let shared = 0
-      for (const tag of a.hashtags.keys()) if (b.hashtags.has(tag)) shared += 1
-      if (shared >= 2) addLink(a.id, b.id, Math.min(shared * 0.3, 1.5), 'topic')
+  // --- shared-topic edges: light-weight, via an inverted tag index ---
+  // (avoids an O(n²) pairwise scan, which gets slow fast once the
+  // account count grows into the hundreds)
+  const tagIndex = new Map() // tag -> Set<pubkey>
+  for (const node of nodes.values()) {
+    if (node.hashtags.size === 0) continue
+    for (const tag of node.hashtags.keys()) {
+      if (!tagIndex.has(tag)) tagIndex.set(tag, new Set())
+      tagIndex.get(tag).add(node.id)
     }
+  }
+  const sharedCount = new Map() // "a|b" -> count of shared tags
+  for (const memberIds of tagIndex.values()) {
+    if (memberIds.size < 2 || memberIds.size > 60) continue // skip mega-common tags, not distinctive
+    const members = [...memberIds]
+    for (let i = 0; i < members.length; i++) {
+      for (let j = i + 1; j < members.length; j++) {
+        const a = members[i]
+        const b = members[j]
+        const key = a < b ? `${a}|${b}` : `${b}|${a}`
+        sharedCount.set(key, (sharedCount.get(key) || 0) + 1)
+      }
+    }
+  }
+  for (const [key, shared] of sharedCount) {
+    if (shared < 2) continue
+    const [a, b] = key.split('|')
+    addLink(a, b, Math.min(shared * 0.3, 1.5), 'topic')
   }
 
   // --- finalize node visuals: color category + size ---
@@ -170,13 +188,20 @@ export function buildGalaxy({ profiles, notes = [], reposts = [], reactions = []
       .map(([tag]) => tag)
   }
 
-  const edges = [...linkWeights.values()].map((l) => ({
+  let edges = [...linkWeights.values()].map((l) => ({
     source: l.a,
     target: l.b,
     weight: l.weight,
     strength: l.weight >= 4 ? 'strong' : l.weight >= 1.5 ? 'medium' : 'weak',
     kinds: [...l.kinds]
   }))
+
+  // Hard safety cap: keep the graph simulate-able even if a pathological
+  // burst of events produces far more links than stars.
+  const MAX_EDGES = 3000
+  if (edges.length > MAX_EDGES) {
+    edges = edges.sort((a, b) => b.weight - a.weight).slice(0, MAX_EDGES)
+  }
 
   return { nodes: [...nodes.values()], edges }
 }
@@ -230,16 +255,61 @@ export function detectConstellations(nodes, edges, { minSize = 3 } = {}) {
 }
 
 /**
- * Runs a force simulation to lay stars out in 2D space, and returns
- * a promise that resolves once it has settled (ticked synchronously,
- * so this is fast for MVP-scale graphs of a few hundred nodes).
+ * Runs a force simulation to lay stars out in 2D space.
+ *
+ * Lazy-loading friendly: pass `previous` (a Map<id, {x,y,vx,vy}> from the
+ * last layout). Already-placed stars are *pinned* at their previous
+ * position (d3's fx/fy) rather than merely reheated — otherwise every
+ * incoming batch nudges the whole graph and stars never sit still long
+ * enough to tap. Only genuinely new stars are left free to settle in,
+ * relative to that fixed backdrop.
  */
-export function layoutGalaxy(nodes, edges, { width = 2000, height = 1400, ticks = 300 } = {}) {
-  const simNodes = nodes.map((n) => ({ ...n }))
+export function layoutGalaxy(nodes, edges, { width = 2000, height = 1400, ticks = 300, previous = null } = {}) {
+  const isWarmStart = !!previous && previous.size > 0
+  let newCount = 0
+
+  const simNodes = nodes.map((n) => {
+    const prior = previous?.get(n.id)
+    if (prior) {
+      // Pinned: fx/fy hold it exactly in place through the simulation.
+      return { ...n, x: prior.x, y: prior.y, vx: 0, vy: 0, fx: prior.x, fy: prior.y }
+    }
+    newCount++
+    return { ...n }
+  })
+
   const idIndex = new Map(simNodes.map((n) => [n.id, n]))
   const simLinks = edges
     .filter((e) => idIndex.has(e.source) && idIndex.has(e.target))
     .map((e) => ({ ...e }))
+
+  if (isWarmStart) {
+    // Seed brand-new stars near an already-placed neighbor (if we can find
+    // one) so they drift into place from nearby instead of from the
+    // origin — cheaper to settle and calmer to watch appear.
+    for (const link of simLinks) {
+      const a = idIndex.get(link.source)
+      const b = idIndex.get(link.target)
+      if (a.x === undefined && b.x !== undefined) {
+        a.x = b.x + (Math.random() - 0.5) * 40
+        a.y = b.y + (Math.random() - 0.5) * 40
+      } else if (b.x === undefined && a.x !== undefined) {
+        b.x = a.x + (Math.random() - 0.5) * 40
+        b.y = a.y + (Math.random() - 0.5) * 40
+      }
+    }
+  }
+
+  // Nothing new arrived — every star is pinned, so there's nothing for a
+  // simulation to do. Skip it entirely rather than spend a single frame
+  // moving pixels that will immediately be reset by fx/fy anyway.
+  if (isWarmStart && newCount === 0) {
+    for (const n of simNodes) {
+      delete n.fx
+      delete n.fy
+    }
+    return simNodes
+  }
 
   const sim = forceSimulation(simNodes)
     .force(
@@ -249,15 +319,27 @@ export function layoutGalaxy(nodes, edges, { width = 2000, height = 1400, ticks 
         .distance((l) => 260 - Math.min(l.weight, 10) * 18)
         .strength((l) => Math.min(0.05 + l.weight * 0.02, 0.4))
     )
-    .force('charge', forceManyBody().strength(-120))
-    .force('center', forceCenter(0, 0))
+    .force('charge', forceManyBody().strength(-140))
+    .force('center', isWarmStart ? null : forceCenter(0, 0))
     .force(
       'collide',
-      forceCollide((d) => 14 + Math.sqrt(1 + d.activity) * 4)
+      forceCollide((d) => 26 + Math.sqrt(1 + d.activity) * 4.5).iterations(3)
     )
     .stop()
 
-  for (let i = 0; i < ticks; i++) sim.tick()
+  // Fresh galaxy: settle fully. Otherwise: only as many ticks as the new
+  // stars actually need to find a free spot against the pinned backdrop —
+  // existing stars can't move regardless, so there's no benefit to more.
+  const effectiveTicks = isWarmStart ? Math.min(160, Math.max(40, newCount * 5)) : ticks
+
+  for (let i = 0; i < effectiveTicks; i++) sim.tick()
+
+  // Unpin before handing back — the position cache stores plain x/y, and
+  // downstream code (rendering, hit-testing) doesn't expect fx/fy.
+  for (const n of simNodes) {
+    delete n.fx
+    delete n.fy
+  }
 
   return simNodes
 }
