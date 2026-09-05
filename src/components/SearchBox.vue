@@ -56,7 +56,7 @@ function pick(node) {
 <style scoped>
 .search {
   position: relative;
-  width: min(260px, 60vw);
+  width: min(280px, 62vw);
 }
 
 .search__input {
@@ -68,7 +68,9 @@ function pick(node) {
   padding: 10px 12px;
   color: var(--star-white);
   font-family: var(--font-ui);
-  font-size: 13px;
+  /* iOS Safari auto-zooms the page on focus for any input under 16px —
+     user-scalable=no no longer reliably suppresses this on modern iOS. */
+  font-size: 16px;
   outline: none;
 }
 .search__input:focus {

@@ -157,4 +157,14 @@ defineEmits(['select'])
 .star--selected .star__label {
   color: var(--star-white);
 }
+
+/* Blurred glows are noticeably more expensive to paint on phone GPUs than
+   on a laptop's — this is the primary surface, so trim it there rather
+   than uniformly softening it for everyone. */
+@media (pointer: coarse) {
+  .star__glow {
+    filter: blur(3px);
+    opacity: 0.45;
+  }
+}
 </style>

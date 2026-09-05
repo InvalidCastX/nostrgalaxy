@@ -324,19 +324,50 @@ function displayEdges() {
   <!-- LANDING -->
   <div v-if="screen === 'landing'" class="landing">
     <div class="landing__stars" aria-hidden="true"></div>
-    <div class="landing__content">
-      <p class="landing__eyebrow">A telescope for the Nostr social universe</p>
-      <h1 class="landing__title">Nostr Galaxy</h1>
-      <p class="landing__body">
-        Explore the people, communities, and conversations forming the Nostr universe — rendered as stars,
-        gravitational links, and constellations.
-      </p>
-      <button class="landing__cta" @click="enterGalaxy">Enter Galaxy</button>
-      <ul class="landing__notes">
-        <li>No account required</li>
-        <li>No private keys, ever</li>
-        <li>Uses public Nostr relay data only</li>
-      </ul>
+    <div class="landing__grid">
+      <div class="landing__content">
+        <p class="landing__eyebrow">A telescope for the Nostr social universe</p>
+        <h1 class="landing__title">Nostr Galaxy</h1>
+        <p class="landing__body">
+          Every account becomes a star. Every reply, mention, and repost becomes a gravitational link between
+          them. Explore the shape of the Nostr network as it actually forms — not as a feed.
+        </p>
+        <button class="landing__cta" @click="enterGalaxy">
+          <i class="fa-solid fa-circle-nodes" aria-hidden="true"></i>
+          Enter Galaxy
+        </button>
+        <ul class="landing__notes">
+          <li><i class="fa-solid fa-door-open" aria-hidden="true"></i> No account required</li>
+          <li><i class="fa-solid fa-shield-halved" aria-hidden="true"></i> No private keys, ever</li>
+          <li><i class="fa-solid fa-satellite-dish" aria-hidden="true"></i> Public relay data only</li>
+          <li><i class="fa-solid fa-infinity" aria-hidden="true"></i> Free to explore, always</li>
+        </ul>
+      </div>
+
+      <div class="landing__orbit" aria-hidden="true">
+        <svg viewBox="0 0 320 320" class="landing__orbit-svg" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <filter id="orbitGlow" x="-120%" y="-120%" width="340%" height="340%">
+              <feGaussianBlur stdDeviation="4" result="blur" />
+              <feMerge>
+                <feMergeNode in="blur" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
+          </defs>
+          <g class="orbit-spin">
+            <ellipse cx="160" cy="160" rx="130" ry="48" class="orbit-ring orbit-ring--a" />
+            <ellipse cx="160" cy="160" rx="48" ry="130" class="orbit-ring orbit-ring--b" transform="rotate(30 160 160)" />
+            <ellipse cx="160" cy="160" rx="96" ry="96" class="orbit-ring orbit-ring--c" />
+            <circle cx="285" cy="140" r="4.5" class="orbit-star orbit-star--gold" filter="url(#orbitGlow)" />
+            <circle cx="60" cy="205" r="3.5" class="orbit-star orbit-star--green" filter="url(#orbitGlow)" />
+            <circle cx="205" cy="55" r="3" class="orbit-star orbit-star--blue" filter="url(#orbitGlow)" />
+            <circle cx="95" cy="90" r="2.6" class="orbit-star orbit-star--purple" filter="url(#orbitGlow)" />
+          </g>
+          <circle cx="160" cy="160" r="18" class="orbit-core" filter="url(#orbitGlow)" />
+          <circle cx="160" cy="160" r="6" class="orbit-core-dot" />
+        </svg>
+      </div>
     </div>
   </div>
 
@@ -366,7 +397,7 @@ function displayEdges() {
     />
 
     <!-- orbit mode panel -->
-    <div class="orbit-panel">
+    <div class="orbit-panel" :class="{ 'orbit-panel--yield': selectedNode }">
       <template v-if="!orbitPubkey">
         <label class="orbit-panel__label">Your Orbit</label>
         <div class="orbit-panel__row">
@@ -467,30 +498,45 @@ function displayEdges() {
     radial-gradient(ellipse at 50% 30%, rgba(120, 100, 200, 0.16), transparent 60%);
   background-size: cover;
 }
-.landing__content {
+.landing__grid {
   position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: 1fr;
+  align-items: center;
+  justify-items: center;
+  gap: 8px;
+  width: 100%;
+  max-width: 980px;
+}
+.landing__content {
   max-width: 480px;
   text-align: center;
 }
 .landing__eyebrow {
   color: var(--c-purple);
   font-size: 13px;
-  margin: 0 0 10px;
+  margin: 0 0 12px;
 }
 .landing__title {
   font-family: var(--font-display);
-  font-size: clamp(40px, 9vw, 64px);
+  font-size: clamp(42px, 8vw, 68px);
   font-weight: 500;
-  margin: 0 0 16px;
-  letter-spacing: -0.01em;
+  line-height: 1.05;
+  margin: 0 0 18px;
+  letter-spacing: -0.02em;
 }
 .landing__body {
   color: var(--dim);
-  line-height: 1.6;
-  font-size: 15px;
-  margin: 0 0 30px;
+  line-height: 1.65;
+  font-size: 15.5px;
+  max-width: 42ch;
+  margin: 0 auto 32px;
 }
 .landing__cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
   background: var(--star-white);
   color: var(--bg-void);
   border: none;
@@ -498,17 +544,114 @@ function displayEdges() {
   padding: 14px 30px;
   font-size: 15px;
   font-weight: 600;
-  margin-bottom: 26px;
+  margin-bottom: 30px;
+  transition: transform 0.15s ease;
+}
+.landing__cta:hover {
+  transform: translateY(-1px);
+}
+.landing__cta i {
+  font-size: 13px;
+  color: var(--c-purple);
 }
 .landing__notes {
   list-style: none;
   padding: 0;
   margin: 0;
-  display: flex;
+  display: inline-flex;
   flex-direction: column;
-  gap: 6px;
+  align-items: flex-start;
+  gap: 10px;
   color: var(--dim);
+  font-size: 13px;
+}
+.landing__notes li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.landing__notes i {
+  width: 15px;
+  text-align: center;
+  color: var(--c-purple);
   font-size: 12.5px;
+}
+
+/* ---------- orbit illustration ---------- */
+.landing__orbit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 8px 0 24px;
+}
+.landing__orbit-svg {
+  width: min(300px, 62vw);
+  height: auto;
+  overflow: visible;
+}
+.orbit-ring {
+  fill: none;
+  stroke-width: 1;
+}
+.orbit-ring--a {
+  stroke: rgba(155, 140, 255, 0.38);
+}
+.orbit-ring--b {
+  stroke: rgba(110, 168, 254, 0.3);
+}
+.orbit-ring--c {
+  stroke: rgba(242, 193, 78, 0.2);
+}
+.orbit-star--gold {
+  fill: var(--c-gold);
+}
+.orbit-star--green {
+  fill: var(--c-green);
+}
+.orbit-star--blue {
+  fill: var(--c-blue);
+}
+.orbit-star--purple {
+  fill: var(--c-purple);
+}
+.orbit-core {
+  fill: var(--c-purple);
+  opacity: 0.85;
+}
+.orbit-core-dot {
+  fill: var(--star-white);
+}
+.orbit-spin {
+  transform-origin: 160px 160px;
+  animation: orbit-spin 140s linear infinite;
+}
+@keyframes orbit-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (min-width: 860px) {
+  .landing__grid {
+    grid-template-columns: minmax(0, 460px) 1fr;
+    justify-items: stretch;
+    gap: 48px;
+    text-align: left;
+  }
+  .landing__content {
+    max-width: none;
+    text-align: left;
+  }
+  .landing__body {
+    margin: 0 0 32px;
+  }
+  .landing__notes {
+    align-items: flex-start;
+  }
+  .landing__orbit-svg {
+    width: min(380px, 100%);
+  }
 }
 
 /* ---------- galaxy screen ---------- */
@@ -528,7 +671,8 @@ function displayEdges() {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 14px 16px;
+  padding: calc(14px + env(safe-area-inset-top)) calc(16px + env(safe-area-inset-right)) 14px
+    calc(16px + env(safe-area-inset-left));
   background: linear-gradient(to bottom, rgba(5, 6, 12, 0.85), transparent);
 }
 .topbar__brand {
@@ -576,16 +720,25 @@ function displayEdges() {
 
 .orbit-panel {
   position: absolute;
-  left: 16px;
-  bottom: 16px;
+  left: calc(16px + env(safe-area-inset-left));
+  bottom: calc(16px + env(safe-area-inset-bottom));
   z-index: 5;
-  width: min(240px, 46vw);
+  width: min(260px, 50vw);
   background: var(--bg-panel);
   backdrop-filter: blur(10px);
   border: 1px solid var(--hairline);
   border-radius: 12px;
   padding: 12px;
   font-size: 12.5px;
+}
+@media (max-width: 639px) {
+  /* On a small phone screen, an open star popup and the orbit panel both
+     want the bottom band of the viewport — the popup is the thing the
+     person just asked for, so it wins and the orbit panel steps aside
+     rather than overlapping it. */
+  .orbit-panel--yield {
+    display: none;
+  }
 }
 .orbit-panel__label {
   margin: 0 0 6px;
@@ -604,7 +757,8 @@ function displayEdges() {
   border-radius: 7px;
   padding: 7px 8px;
   color: var(--star-white);
-  font-size: 12px;
+  /* Same iOS Safari auto-zoom-on-focus issue as the search input. */
+  font-size: 16px;
   font-family: var(--font-ui);
 }
 .orbit-panel__go {
@@ -654,8 +808,8 @@ function displayEdges() {
 
 .footer-row {
   position: absolute;
-  right: 16px;
-  bottom: 16px;
+  right: calc(16px + env(safe-area-inset-right));
+  bottom: calc(16px + env(safe-area-inset-bottom));
   z-index: 5;
   display: flex;
   flex-direction: column;
@@ -689,7 +843,7 @@ function displayEdges() {
 
 .constellation-panel {
   position: absolute;
-  right: 16px;
+  right: calc(16px + env(safe-area-inset-right));
   bottom: 64px;
   z-index: 6;
   width: min(260px, 60vw);
@@ -743,14 +897,14 @@ function displayEdges() {
 .popup-anchor {
   position: absolute;
   left: 50%;
-  bottom: 16px;
+  bottom: calc(16px + env(safe-area-inset-bottom));
   transform: translateX(-50%);
   z-index: 10;
 }
 @media (min-width: 640px) {
   .popup-anchor {
     left: auto;
-    right: 16px;
+    right: calc(16px + env(safe-area-inset-right));
     top: 70px;
     bottom: auto;
     transform: none;

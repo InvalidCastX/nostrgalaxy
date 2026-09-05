@@ -17,6 +17,33 @@ const dragging = ref(false)
 let dragStart = null
 let pinchStart = null
 
+// Coarse-pointer (touch) devices get fewer, cheaper stars — phones have far
+// less GPU/CPU headroom than a laptop for 260 live DOM elements with blur
+// glows, and this is the primary surface, so it needs its own budget.
+const isCoarsePointer = typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches
+
+// --- RAF-batched view updates ---
+// touchmove fires far more often than the screen can repaint (sometimes
+// 100+ times/sec). Writing straight into the reactive `view` on every event
+// forced a full culledNodes recompute (an O(n) loop with trig) that often —
+// this is what made panning feel laggy/sticky on a phone. Collapsing every
+// pending change into a single requestAnimationFrame callback caps the
+// recompute rate to the display's actual refresh rate.
+let rafId = null
+const pendingView = { x: null, y: null, scale: null, rotation: null }
+function flushPendingView() {
+  rafId = null
+  if (pendingView.x !== null) view.x = pendingView.x
+  if (pendingView.y !== null) view.y = pendingView.y
+  if (pendingView.scale !== null) view.scale = pendingView.scale
+  if (pendingView.rotation !== null) view.rotation = pendingView.rotation
+  pendingView.x = pendingView.y = pendingView.scale = pendingView.rotation = null
+}
+function queueViewUpdate(patch) {
+  Object.assign(pendingView, patch)
+  if (rafId === null) rafId = requestAnimationFrame(flushPendingView)
+}
+
 const nodeById = computed(() => new Map(props.nodes.map((n) => [n.id, n])))
 
 // --- viewport culling ---
@@ -25,7 +52,7 @@ const nodeById = computed(() => new Map(props.nodes.map((n) => [n.id, n])))
 // fetch itself. So only mount stars that are within (or just outside)
 // the visible viewport; panning/zooming re-derives this cheaply.
 const CULL_MARGIN = 240 // screen px of slack around the viewport edge
-const MAX_RENDERED_STARS = 260 // hard ceiling even if zoomed far out
+const MAX_RENDERED_STARS = isCoarsePointer ? 150 : 260 // lower ceiling on touch devices
 
 // Sticky set from the previous computation — lets the margin trim below
 // prefer stars it already rendered, instead of re-litigating the ranking
@@ -140,8 +167,7 @@ function onPointerDown(e) {
 }
 function onPointerMove(e) {
   if (!dragging.value || !dragStart) return
-  view.x = e.clientX - dragStart.x
-  view.y = e.clientY - dragStart.y
+  queueViewUpdate({ x: e.clientX - dragStart.x, y: e.clientY - dragStart.y })
 }
 function onPointerUp() {
   dragging.value = false
@@ -192,8 +218,7 @@ function onTouchStart(e) {
 }
 function onTouchMove(e) {
   if (e.touches.length === 1 && dragging.value && dragStart) {
-    view.x = e.touches[0].clientX - dragStart.x
-    view.y = e.touches[0].clientY - dragStart.y
+    queueViewUpdate({ x: e.touches[0].clientX - dragStart.x, y: e.touches[0].clientY - dragStart.y })
   } else if (e.touches.length === 2 && pinchStart) {
     e.preventDefault()
     const d = dist(e.touches[0], e.touches[1])
@@ -203,17 +228,20 @@ function onTouchMove(e) {
     const rect = viewportEl.value.getBoundingClientRect()
     const cx = midX - rect.left
     const cy = midY - rect.top
+    const curX = pendingView.x !== null ? pendingView.x : view.x
+    const curY = pendingView.y !== null ? pendingView.y : view.y
+    const curScale = pendingView.scale !== null ? pendingView.scale : view.scale
     const newScale = Math.min(3, Math.max(0.12, pinchStart.scale * factor))
-    const ratio = newScale / view.scale
-    view.x = cx - (cx - view.x) * ratio
-    view.y = cy - (cy - view.y) * ratio
-    view.scale = newScale
+    const ratio = newScale / curScale
+    const newX = cx - (cx - curX) * ratio
+    const newY = cy - (cy - curY) * ratio
 
     // Twist to rotate — a second finger turning around the first is the
     // standard mobile "rotate the map" gesture (same as Google/Apple Maps).
     const angle = angleOf(e.touches[0], e.touches[1])
     const deltaDeg = ((angle - pinchStart.angle) * 180) / Math.PI
-    view.rotation = pinchStart.rotation + deltaDeg
+
+    queueViewUpdate({ x: newX, y: newY, scale: newScale, rotation: pinchStart.rotation + deltaDeg })
   }
 }
 function onTouchEnd(e) {
@@ -251,6 +279,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   window.removeEventListener('pointerup', onPointerUp)
   window.removeEventListener('resize', updateViewportSize)
+  if (rafId !== null) cancelAnimationFrame(rafId)
 })
 </script>
 
@@ -343,7 +372,7 @@ onBeforeUnmount(() => {
 
 .compass {
   position: absolute;
-  right: 14px;
+  right: calc(14px + env(safe-area-inset-right));
   top: 50%;
   transform: translateY(-50%);
   z-index: 4;

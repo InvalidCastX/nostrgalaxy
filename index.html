@@ -6,6 +6,29 @@
     <meta name="theme-color" content="#05060c" />
     <title>Nostr Galaxy Map</title>
     <meta name="description" content="An interactive star map of the Nostr / BCHNostr social universe. Public relay data only." />
+
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="mask-icon" href="/favicon.svg" color="#9b8cff" />
+
+    <!-- Preconnect first — these are the two external hosts the page pays
+         a DNS/TLS round trip for (fonts, icon glyphs). Only the "solid"
+         Font Awesome subset is loaded, not the full icon kit, to keep the
+         extra request as light as the ask for icon graphics allows. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Space+Grotesk:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/fontawesome.min.css"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/solid.min.css"
+    />
   </head>
   <body>
     <div id="app"></div>
