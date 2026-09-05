@@ -2,8 +2,7 @@
   "relays": [
     "wss://relay.bchnostr.com",
     "wss://relay.nos.lol",
-    "wss://relay.damus.io",
-    "wss://nos.lol"
+    "wss://relay.damus.io"
   ],
   "nostrCardBaseUrl": "https://nostrcard.vercel.app/#/p/",
   "maxProfiles": 500,

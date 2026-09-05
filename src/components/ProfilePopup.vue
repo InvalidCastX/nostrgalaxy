@@ -1,12 +1,21 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, inject } from 'vue'
 import { hexToNpub } from '../nostr.js'
+import { avatarThumb } from '../image.js'
 
 const props = defineProps({
   node: { type: Object, required: true },
   nostrCardBaseUrl: { type: String, default: 'https://nostrcard.vercel.app/#/p/' }
 })
 defineEmits(['close'])
+
+const dataMode = inject('dataMode', computed(() => 'saver'))
+const avatarSrc = computed(() => {
+  if (!props.node.picture || dataMode.value === 'off') return null
+  // The popup avatar renders a bit larger than a star (~56px), so ask
+  // for a slightly bigger thumbnail than the in-galaxy one.
+  return dataMode.value === 'full' ? props.node.picture : avatarThumb(props.node.picture, 96)
+})
 
 const npub = computed(() => hexToNpub(props.node.id) || props.node.id)
 const shortNpub = computed(() => npub.value.slice(0, 12) + '…' + npub.value.slice(-6))
@@ -33,7 +42,15 @@ function copyNpub() {
 
     <div class="popup__header">
       <div class="popup__avatar-wrap" :class="`ring--${node.color}`">
-        <img v-if="node.picture" :src="node.picture" class="popup__avatar" alt="" @error="$event.target.style.display = 'none'" />
+        <img
+          v-if="avatarSrc"
+          :src="avatarSrc"
+          class="popup__avatar"
+          loading="lazy"
+          decoding="async"
+          alt=""
+          @error="$event.target.style.display = 'none'"
+        />
         <span v-else class="popup__avatar-fallback">✦</span>
       </div>
       <div>

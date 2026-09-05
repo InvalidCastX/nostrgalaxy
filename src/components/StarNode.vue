@@ -1,11 +1,24 @@
 <script setup>
-defineProps({
+import { inject, computed } from 'vue'
+import { avatarThumb } from '../image.js'
+
+const props = defineProps({
   node: { type: Object, required: true },
   radius: { type: Number, default: 18 },
   selected: { type: Boolean, default: false },
   rotation: { type: Number, default: 0 } // current galaxy rotation, in degrees — labels counter-rotate to stay upright
 })
 defineEmits(['select'])
+
+// 'off' skips avatars entirely (cheapest), 'saver' fetches a small resized
+// version, 'full' loads the original image as-is. Provided from App.vue.
+const dataMode = inject('dataMode', computed(() => 'saver'))
+const avatarSrc = computed(() => {
+  if (!props.node.picture || dataMode.value === 'off') return null
+  // Star avatars render at ~26-90px depending on activity — 64px covers
+  // the visible range at 2x pixel density without over-fetching.
+  return dataMode.value === 'full' ? props.node.picture : avatarThumb(props.node.picture, 64)
+})
 </script>
 
 <template>
@@ -25,10 +38,11 @@ defineEmits(['select'])
       <span class="star__glow" aria-hidden="true"></span>
       <span class="star__body" aria-hidden="true">
         <img
-          v-if="node.picture"
-          :src="node.picture"
+          v-if="avatarSrc"
+          :src="avatarSrc"
           class="star__avatar"
           loading="lazy"
+          decoding="async"
           alt=""
           @error="$event.target.style.display = 'none'"
         />

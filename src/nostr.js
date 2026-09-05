@@ -5,11 +5,13 @@
 // REQ / CLOSE messages and reads EVENT / EOSE / NOTICE frames back.
 // Read-only, public-data-only, by construction.
 
+// 'wss://relay.nos.lol' and 'wss://nos.lol' resolve to the same relay, so
+// only one is kept — connecting to both just doubles traffic for zero
+// extra coverage, since the pool already de-dupes by relay, not by event.
 const DEFAULT_RELAYS = [
   'wss://relay.bchnostr.com',
   'wss://relay.nos.lol',
-  'wss://relay.damus.io',
-  'wss://nos.lol'
+  'wss://relay.damus.io'
 ]
 
 function randId() {

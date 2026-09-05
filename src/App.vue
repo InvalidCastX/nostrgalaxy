@@ -1,5 +1,5 @@
 <script setup>
-import { ref, reactive, computed, onBeforeUnmount, onMounted } from 'vue'
+import { ref, reactive, computed, onBeforeUnmount, onMounted, provide } from 'vue'
 import GalaxyView from './components/GalaxyView.vue'
 import ProfilePopup from './components/ProfilePopup.vue'
 import SearchBox from './components/SearchBox.vue'
@@ -23,6 +23,23 @@ const config = reactive({
   loadMoreStep: 120
 })
 const configLoaded = ref(false)
+
+// --- avatar data mode ---
+// 'saver' (default) fetches small resized avatars; 'full' loads original
+// images as-is; 'off' skips avatars entirely and shows the spark icon.
+// If the device/browser tells us the person is on a constrained or
+// data-saver connection, start even more conservatively.
+const nav = typeof navigator !== 'undefined' ? navigator : null
+const conn = nav?.connection || nav?.mozConnection || nav?.webkitConnection
+const startInOff = !!(conn?.saveData || (conn?.effectiveType && /2g/.test(conn.effectiveType)))
+const dataMode = ref(startInOff ? 'off' : 'saver')
+provide('dataMode', dataMode)
+const dataModeLabel = computed(
+  () => ({ saver: 'Data saver', off: 'Images off', full: 'Full images' })[dataMode.value]
+)
+function cycleDataMode() {
+  dataMode.value = dataMode.value === 'saver' ? 'off' : dataMode.value === 'off' ? 'full' : 'saver'
+}
 
 async function loadConfig() {
   try {
@@ -445,6 +462,13 @@ function displayEdges() {
         @click="loadMore"
       >
         {{ loadingMore ? 'Loading…' : 'Load more stars' }}
+      </button>
+      <button
+        class="constellation-toggle"
+        @click="cycleDataMode"
+        title="Cycles avatar quality: data saver → images off → full quality"
+      >
+        {{ dataModeLabel }}
       </button>
     </div>
 
